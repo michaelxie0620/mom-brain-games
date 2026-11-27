@@ -1,5 +1,4 @@
 (() => {
-  // 動態注入這 4 款遊戲的專屬大按鈕樣式（免修改 style.css）
   if (!document.getElementById('visual-games-style')) {
     const style = document.createElement('style');
     style.id = 'visual-games-style';
@@ -34,6 +33,7 @@
         padding: 14px 18px; min-width: 120px; display: flex; flex-direction: column; align-items: center;
       }
       .vg-item-pill.done { background: #DCFCE7; border-color: #16A34A; }
+      .vg-action-bar { width: 100%; display: flex; justify-content: center; margin-top: 8px; }
       @keyframes vgPop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     `;
     document.head.appendChild(style);
@@ -64,7 +64,7 @@
   }
 
   // =========================================================================
-  // 遊戲 1：翻牌配對（水果 / 台灣美食 / 自然花草，自動升級）
+  // 遊戲 1：翻牌配對（手動決定何時蓋牌，完全零時間壓力）
   // =========================================================================
   const MEMORY_THEMES = [
     {
@@ -116,6 +116,7 @@
     let flippedCards = [];
     let isLocked = true;
     let matchedPairs = 0;
+    let hasStarted = false;
 
     const cols = pairCount === 3 ? 3 : 4;
     const wrap = document.createElement('div');
@@ -123,14 +124,20 @@
     wrap.innerHTML = `
       <div class="vg-header">
         <span class="vg-badge">第 ${memoryLevel} 關｜${theme.name}（${pairCount} 對）</span>
-        <button class="vg-sub-btn" id="mm-peek">👀 偷看一下</button>
+        <button class="vg-sub-btn" id="mm-peek" style="display:none;">👀 偷看一下</button>
       </div>
       <div class="vg-grid" id="mm-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
+      <div class="vg-action-bar" id="mm-action-bar">
+        <button class="btn-big green" id="mm-cover-btn">👀 我記好了，蓋起來開始玩！</button>
+      </div>
     `;
     stage.innerHTML = '';
     stage.appendChild(wrap);
 
     const grid = wrap.querySelector('#mm-grid');
+    const peekBtn = wrap.querySelector('#mm-peek');
+    const actionBar = wrap.querySelector('#mm-action-bar');
+    const coverBtn = wrap.querySelector('#mm-cover-btn');
 
     function renderDeck(forceReveal = false) {
       grid.innerHTML = '';
@@ -195,27 +202,35 @@
       }
     }
 
-    // 偷看按鈕（避免挫敗）
-    wrap.querySelector('#mm-peek').onclick = () => {
-      if (isLocked) return;
-      isLocked = true;
-      renderDeck(true);
-      GameHub.setAIMessage('給你偷看 2 秒鐘，趕快記起來喔！', true);
-      setTimeout(() => {
-        if (!wrap.isConnected) return;
-        renderDeck(false);
-        isLocked = false;
-      }, 2000);
-    };
-
-    // 開局先展示 2.5 秒讓長輩有頭緒
-    renderDeck(true);
-    GameHub.setAIMessage(`第 ${memoryLevel} 關！先看一眼圖案的位置，等一下蓋起來再把一樣的配對喔！`, true);
-    setTimeout(() => {
-      if (!wrap.isConnected) return;
+    // 玩家自行按下「蓋起來」按鈕
+    coverBtn.onclick = () => {
+      GameHub.playTone(440, 0.12);
+      actionBar.style.display = 'none';
+      peekBtn.style.display = 'inline-block';
       renderDeck(false);
       isLocked = false;
-    }, 2500);
+      if (!hasStarted) {
+        hasStarted = true;
+        GameHub.setAIMessage('蓋起來囉！現在請翻開兩張一樣的圖案配對吧！', true);
+      } else {
+        GameHub.setAIMessage('蓋起來囉！我們繼續把剩下的找出來！', true);
+      }
+    };
+
+    // 偷看按鈕：打開後也是等玩家自己按蓋起來
+    peekBtn.onclick = () => {
+      if (isLocked) return;
+      isLocked = true;
+      peekBtn.style.display = 'none';
+      coverBtn.textContent = '✅ 看好了，蓋起來繼續玩！';
+      actionBar.style.display = 'flex';
+      renderDeck(true);
+      GameHub.setAIMessage('慢慢看沒關係，記起來了再按下面的綠色按鈕蓋起來喔！', true);
+    };
+
+    // 開局全部亮出來，完全不倒數
+    renderDeck(true);
+    GameHub.setAIMessage(`第 ${memoryLevel} 關！請慢慢記住圖案的位置，記好了再按下面的綠色按鈕蓋起來喔！`, true);
   }
 
   // =========================================================================
@@ -455,7 +470,7 @@
   }
 
   // =========================================================================
-  // 遊戲 4：簡易撿紅點（翻牌湊 10，記憶力 + 輕鬆心算）
+  // 遊戲 4：簡易撿紅點（手動決定何時蓋牌，翻牌湊 10）
   // =========================================================================
   const TEN_PAIRS = [
     [1, 9], [2, 8], [3, 7], [4, 6], [5, 5]
@@ -497,6 +512,7 @@
     let flippedCards = [];
     let isLocked = true;
     let matchedPairs = 0;
+    let hasStarted = false;
 
     const cols = pairCount === 3 ? 3 : pairCount === 4 ? 4 : 5;
     const wrap = document.createElement('div');
@@ -504,14 +520,20 @@
     wrap.innerHTML = `
       <div class="vg-header">
         <span class="vg-badge">第 ${tenLevel} 關｜兩張加起來等於 10</span>
-        <button class="vg-sub-btn" id="mt-peek">👀 偷看 2 秒</button>
+        <button class="vg-sub-btn" id="mt-peek" style="display:none;">👀 偷看一下</button>
       </div>
       <div class="vg-grid" id="mt-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
+      <div class="vg-action-bar" id="mt-action-bar">
+        <button class="btn-big green" id="mt-cover-btn">👀 我記好了，蓋起來開始玩！</button>
+      </div>
     `;
     stage.innerHTML = '';
     stage.appendChild(wrap);
 
     const grid = wrap.querySelector('#mt-grid');
+    const peekBtn = wrap.querySelector('#mt-peek');
+    const actionBar = wrap.querySelector('#mt-action-bar');
+    const coverBtn = wrap.querySelector('#mt-cover-btn');
 
     function renderDeck(forceReveal = false) {
       grid.innerHTML = '';
@@ -590,23 +612,31 @@
       }
     }
 
-    wrap.querySelector('#mt-peek').onclick = () => {
+    coverBtn.onclick = () => {
+      GameHub.playTone(440, 0.12);
+      actionBar.style.display = 'none';
+      peekBtn.style.display = 'inline-block';
+      renderDeck(false);
+      isLocked = false;
+      if (!hasStarted) {
+        hasStarted = true;
+        GameHub.setAIMessage('蓋起來囉！現在翻出兩張加起來等於 10 的牌吧！', true);
+      } else {
+        GameHub.setAIMessage('蓋起來囉！繼續把剩下的牌湊成 10 吧！', true);
+      }
+    };
+
+    peekBtn.onclick = () => {
       if (isLocked) return;
       isLocked = true;
+      peekBtn.style.display = 'none';
+      coverBtn.textContent = '✅ 看好了，蓋起來繼續玩！';
+      actionBar.style.display = 'flex';
       renderDeck(true);
-      setTimeout(() => {
-        if (!wrap.isConnected) return;
-        renderDeck(false);
-        isLocked = false;
-      }, 2000);
+      GameHub.setAIMessage('慢慢看沒關係，記好了再按下面的綠色按鈕蓋起來喔！', true);
     };
 
     renderDeck(true);
-    GameHub.setAIMessage('先記一下數字在哪裡喔！等一下翻出兩張加起來等於 10 就得分！', true);
-    setTimeout(() => {
-      if (!wrap.isConnected) return;
-      renderDeck(false);
-      isLocked = false;
-    }, 2800);
+    GameHub.setAIMessage('請慢慢記住數字在哪裡，記好了再按下面的綠色按鈕蓋起來開始玩喔！', true);
   }
 })();
