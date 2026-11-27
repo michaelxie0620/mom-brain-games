@@ -22,7 +22,11 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     const userParts = [];
     if (audioBase64 && mimeType) {
-      const cleanMimeType = mimeType.split(';')[0].trim();
+      let cleanMimeType = mimeType.split(';')[0].trim();
+      // iPad Safari 錄音預設為 audio/mp4 容器，轉為 video/mp4 才能通過 Gemini 格式檢查
+      if (cleanMimeType === 'audio/mp4') {
+        cleanMimeType = 'video/mp4';
+      }
       userParts.push({ inlineData: { mimeType: cleanMimeType, data: audioBase64 } });
       userParts.push({ text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應媽媽。' });
     } else if (text) {
@@ -33,56 +37,31 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     const contents = [...history.slice(-4), { role: 'user', parts: userParts }];
 
-    // 優先用速度最快、不塞車的 Lite 模型；若不支援再自動切換主模型
-    const attempts = [
-      { model: 'gemini-3.8-flash-lite', disableThinking: true },
-      { model: 'gemini-3.8-flash', disableThinking: true },
-      { model: 'gemini-3.8-flash', disableThinking: false }
-    ];
-
-    let response;
-    let data = {};
-
-    for (const item of attempts) {
-      const genConfig = {
-        temperature: 0.7,
-        maxOutputTokens: 100
-      };
-      if (item.disableThinking) {
-        genConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 最多等 5 秒，絕不乾等 10 秒
-
-      try {
-        response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${item.model}:generateContent`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey
-            },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemInstruction }] },
-              contents,
-              generationConfig: genConfig
-            }),
-            signal: controller.signal
+    const response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 120
           }
-        );
-        clearTimeout(timeoutId);
-        data = await response.json();
-        if (response.ok) break;
-      } catch (e) {
-        clearTimeout(timeoutId);
+        })
       }
-    }
+    );
 
-    if (!response || !response.ok) {
+    const data = await response.json();
+
+    if (!response.ok) {
+      const detail = data?.error?.message || `HTTP ${response.status}`;
       return res.status(200).json({
-        reply: '哎呀，剛剛線上剛好有點忙，再按一次跟我說好嗎？'
+        reply: `（連線異常：${detail}）`
       });
     }
 
@@ -92,6 +71,6 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     return res.status(200).json({ reply });
   } catch (err) {
-    return res.status(500).json({ error: '連線發生異常' });
+    return res.status(500).json({ error: err.message || '連線發生異常' });
   }
 };
