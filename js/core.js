@@ -282,7 +282,7 @@ window.GameHub = (() => {
     unlockAudio();
     currentGameId = 'free-chat';
     chatHistory = [];
-    currentGameContext = '自由閒聊時間，陪媽媽話家常、關心她今天過得好不好。';
+    currentGameContext = '自由閒聊時間，陪使用者話家常、關心今天過得好不好，一律稱呼對方為「你」。';
     document.getElementById('current-game-title').textContent = '💬 找 AI 聊天';
     switchScreen('game-screen');
 
@@ -299,7 +299,7 @@ window.GameHub = (() => {
         </div>
       </div>
     `;
-    setAIMessage('媽，今天過得好嗎？想聊什麼都可以用講的喔！', true);
+    setAIMessage('今天過得好嗎？想聊什麼都可以用講的喔！', true);
   }
 
   function goHome() {
