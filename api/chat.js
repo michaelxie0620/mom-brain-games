@@ -1,3 +1,67 @@
+let cachedModels = null;
+let cacheTimestamp = 0;
+
+// 自動向 Google 查詢此金鑰目前可用的 Gemini 模型，並依速度排序
+async function getCandidateModels(apiKey) {
+  const now = Date.now();
+  // 快取 10 分鐘，不用每次聊天都重複查詢
+  if (cachedModels && now - cacheTimestamp < 10 * 60 * 1000) {
+    return cachedModels;
+  }
+
+  const fallbackList = [
+    'gemini-3.8-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-flash-latest',
+    'gemini-3.8-flash'
+  ];
+
+  try {
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',
+      { headers: { 'x-goog-api-key': apiKey } }
+    );
+    if (!res.ok) return fallbackList;
+
+    const data = await res.json();
+    const excludePattern =
+      /embedding|imagen|veo|tts|image|aqa|robotics|computer|research|live|native-audio|dialog|gemma|gemini-1\.|gemini-2\.0/i;
+
+    const models = (data.models || [])
+      .filter(
+        (m) =>
+          m.supportedGenerationMethods?.includes('generateContent') &&
+          m.name?.startsWith('models/gemini-') &&
+          !excludePattern.test(m.name) &&
+          m.name !== 'models/gemini-2.5-flash'
+      )
+      .map((m) => m.name.replace('models/', ''));
+
+    if (models.length === 0) return fallbackList;
+
+    // 排序：優先選最不塞車的 flash-lite -> 其他 flash -> pro -> 剛才塞車的 3.8-flash
+    models.sort((a, b) => {
+      const rank = (name) => {
+        if (name === 'gemini-3.8-flash') return 40;
+        if (name.includes('flash-lite')) return 10;
+        if (name.includes('flash')) return 20;
+        if (name.includes('pro')) return 30;
+        return 50;
+      };
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      // 同類型優先選版本號較新的
+      return b.localeCompare(a);
+    });
+
+    cachedModels = models.slice(0, 6);
+    cacheTimestamp = now;
+    return cachedModels;
+  } catch (e) {
+    return fallbackList;
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -23,12 +87,11 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     const userParts = [];
     if (audioBase64 && mimeType) {
       let cleanMimeType = mimeType.split(';')[0].trim();
-      // iPad Safari 錄音預設為 audio/mp4 容器，轉為 video/mp4 才能通過 Gemini 格式檢查
-      if (cleanMimeType === 'audio/mp4') {
-        cleanMimeType = 'video/mp4';
-      }
+      if (cleanMimeType === 'audio/mp4') cleanMimeType = 'video/mp4';
       userParts.push({ inlineData: { mimeType: cleanMimeType, data: audioBase64 } });
-      userParts.push({ text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應媽媽。' });
+      userParts.push({
+        text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應媽媽。'
+      });
     } else if (text) {
       userParts.push({ text });
     } else {
@@ -36,40 +99,53 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     }
 
     const contents = [...history.slice(-4), { role: 'user', parts: userParts }];
+    const payload = JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 300 }
+    });
 
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 120
+    const candidateModels = await getCandidateModels(apiKey);
+    const attemptLogs = [];
+
+    for (const modelName of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: payload,
+            signal: controller.signal
           }
-        })
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+        if (response.ok) {
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const textPart = parts.find((p) => !p.thought && p.text);
+          const reply = textPart?.text?.trim();
+          if (reply) {
+            return res.status(200).json({ reply, modelUsed: modelName });
+          }
+        }
+        attemptLogs.push(`${modelName}(${response.status})`);
+      } catch (e) {
+        clearTimeout(timeoutId);
+        attemptLogs.push(`${modelName}(超時)`);
       }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const detail = data?.error?.message || `HTTP ${response.status}`;
-      return res.status(200).json({
-        reply: `（連線異常：${detail}）`
-      });
     }
 
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-      '你剛剛講得很好喔，我們繼續吧！';
-
-    return res.status(200).json({ reply });
+    return res.status(200).json({
+      reply: `（備用模型目前皆忙線：${attemptLogs.join('、')}）`
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message || '連線發生異常' });
   }
