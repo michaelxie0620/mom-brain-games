@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>樂齡健腦小樂園</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- 首頁畫面 -->
+  <div id="home-screen" class="screen active">
+    <header class="home-header">
+      <div class="greeting-box">
+        <h1 id="greeting-text">早安！今天一起動動腦 🌻</h1>
+        <button class="btn-icon-pill" onclick="GameHub.speakGreeting()">🔊 聽聲音</button>
+      </div>
+      <div class="header-actions">
+        <div class="star-badge">⭐ 星星：<span id="star-count">0</span></div>
+        <button class="btn-chat-home" onclick="GameHub.openFreeChat()">💬 找 AI 聊天</button>
+      </div>
+    </header>
+
+    <!-- 9 款遊戲大按鈕區 -->
+    <main class="game-grid" id="game-grid"></main>
+  </div>
+
+  <!-- 遊戲與聊天共用內頁 -->
+  <div id="game-screen" class="screen">
+    <nav class="game-navbar">
+      <button class="btn-home" onclick="GameHub.goHome()">🏠 回首頁</button>
+      <h2 id="current-game-title" class="game-title">遊戲名稱</h2>
+      <div class="star-badge">⭐ <span id="game-star-count">0</span></div>
+    </nav>
+
+    <!-- AI 陪玩對話列 -->
+    <section class="ai-companion-bar">
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-bubble">
+        <p id="ai-message-text">準備好了嗎？我們開始囉！</p>
+      </div>
+      <div class="ai-controls">
+        <button class="btn-voice-replay" onclick="GameHub.replayLastSpeech()">🔊 重聽</button>
+        <button id="btn-mic" class="btn-mic" onclick="GameHub.toggleRecording()">🎤 點一下說話</button>
+      </div>
+    </section>
+
+    <!-- 遊戲主舞台 -->
+    <main id="game-stage" class="game-stage"></main>
+  </div>
+
+  <!-- 提示小視窗 -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- 程式引擎（下一步會陸續建立這些檔案） -->
+  <script src="./js/core.js"></script>
+  <script src="./js/games-visual.js" defer></script>
+  <script src="./js/games-audio.js" defer></script>
+  <script src="./js/games-ai.js" defer></script>
+</body>
+</html>
