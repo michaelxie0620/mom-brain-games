@@ -44,7 +44,7 @@
   }
 
   function playSimon(stage, level, lives) {
-    const seqLen = Math.min(level + 1, 7);
+    const seqLen = Math.min(level + 2, 10);
     const seq = Array.from({ length: seqLen }, () => Math.floor(Math.random() * 4));
     let step = 0, mode = 'ready';
 
