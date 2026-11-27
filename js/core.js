@@ -26,9 +26,12 @@ window.GameHub = (() => {
   let chatHistory = [];
   let currentGameId = null;
 
+  // 麥克風待機與錄音控制
+  let micStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
   let isRecording = false;
+  let isStartingMic = false;
   let isWaitingAI = false;
   let audioCtx = null;
 
@@ -41,14 +44,14 @@ window.GameHub = (() => {
     if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
   }
 
-  function playTone(freq = 523.25, duration = 0.25, type = 'sine') {
+  function playTone(freq = 523.25, duration = 0.25, type = 'sine', volume = 0.25) {
     unlockAudio();
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
@@ -115,12 +118,39 @@ window.GameHub = (() => {
     playSuccess();
   }
 
-  function showToast(msg, duration = 4000) {
+  function showToast(msg, duration = 3500) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;
     toast.classList.remove('hidden');
     clearTimeout(toast._timer);
     toast._timer = setTimeout(() => toast.classList.add('hidden'), duration);
+  }
+
+  function resetMicButton() {
+    const micBtn = document.getElementById('btn-mic');
+    if (!micBtn) return;
+    micBtn.classList.remove('recording');
+    micBtn.disabled = false;
+    micBtn.textContent = '🎤 點一下說話';
+  }
+
+  async function getMicStream() {
+    if (
+      micStream &&
+      micStream.active &&
+      micStream.getAudioTracks().some((t) => t.readyState === 'live')
+    ) {
+      return micStream;
+    }
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return micStream;
+  }
+
+  function releaseMicStream() {
+    if (micStream) {
+      micStream.getTracks().forEach((track) => track.stop());
+      micStream = null;
+    }
   }
 
   async function askAI({ text = '', audioBase64 = null, mimeType = null, gameContext = '' } = {}) {
@@ -164,26 +194,29 @@ window.GameHub = (() => {
       return data.reply;
     } catch (err) {
       const reason = err.message || '未知錯誤';
-      showToast('連線失敗：' + reason, 5000);
+      showToast('連線失敗：' + reason, 4500);
       setAIMessage('（系統提示：' + reason + '）', false);
       return null;
     } finally {
       isWaitingAI = false;
-      if (micBtn) {
-        micBtn.disabled = false;
-        micBtn.textContent = '🎤 點一下說話';
-      }
+      resetMicButton();
     }
   }
 
   async function toggleRecording() {
     unlockAudio();
-    if (isWaitingAI) return;
+    if (isWaitingAI || isStartingMic) return;
     const micBtn = document.getElementById('btn-mic');
 
     if (!isRecording) {
+      // 立刻中斷正在播放的語音並給予視覺回饋
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      isStartingMic = true;
+      micBtn.classList.add('recording');
+      micBtn.textContent = '🎙️ 準備收音...';
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await getMicStream();
         const preferredTypes = ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'];
         const supportedType = preferredTypes.find((t) => MediaRecorder.isTypeSupported(t)) || '';
 
@@ -197,12 +230,12 @@ window.GameHub = (() => {
         };
 
         mediaRecorder.onstop = async () => {
-          stream.getTracks().forEach((track) => track.stop());
           const actualMime = mediaRecorder.mimeType || 'audio/mp4';
           const blob = new Blob(audioChunks, { type: actualMime });
 
           if (blob.size < 1000) {
             showToast('聲音太短了，請再說一次喔！');
+            resetMicButton();
             return;
           }
 
@@ -220,17 +253,25 @@ window.GameHub = (() => {
 
         mediaRecorder.start();
         isRecording = true;
-        micBtn.classList.add('recording');
+        isStartingMic = false;
         micBtn.textContent = '⏹️ 講完了點我送出';
+        playTone(880, 0.08, 'sine', 0.15); // 輕脆提示音：可以開始說話
       } catch (err) {
+        isStartingMic = false;
+        isRecording = false;
+        releaseMicStream();
+        resetMicButton();
         showToast('請允許 iPad 使用麥克風才能說話喔！');
       }
     } else {
       isRecording = false;
       micBtn.classList.remove('recording');
-      micBtn.textContent = '🎤 點一下說話';
+      micBtn.disabled = true;
+      micBtn.textContent = '⏳ 傳送語音中...';
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
+      } else {
+        resetMicButton();
       }
     }
   }
@@ -269,7 +310,7 @@ window.GameHub = (() => {
 
     currentGameId = gameId;
     chatHistory = [];
-    currentGameContext = `正在玩「${meta.title}」：${meta.desc}`;
+    currentGameContext = `正在玩「${meta.title}」：${meta.desc}，稱呼對方時一律使用「你」。`;
     document.getElementById('current-game-title').textContent = `${meta.emoji} ${meta.title}`;
     switchScreen('game-screen');
 
@@ -305,8 +346,12 @@ window.GameHub = (() => {
   function goHome() {
     if (isRecording && mediaRecorder) {
       isRecording = false;
-      mediaRecorder.stop();
+      mediaRecorder.onstop = null;
+      if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
+    isStartingMic = false;
+    releaseMicStream();
+    resetMicButton();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     currentGameId = null;
     renderHomeGrid();
