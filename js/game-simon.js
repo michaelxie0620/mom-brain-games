@@ -1,20 +1,23 @@
 (() => {
-  if (!document.getElementById('simon-style')) {
-    const st = document.createElement('style');
-    st.id = 'simon-style';
-    st.textContent = `
-      .sm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;width:100%;max-width:680px}
-      .sm-pad{min-height:175px;border-radius:28px;border:5px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,filter .15s,box-shadow .15s;opacity:.88}
-      .sm-pad:active{transform:scale(.96)}
-      .sm-pad.lit{opacity:1;transform:scale(1.05);filter:brightness(1.18);border-color:#1E293B;box-shadow:0 0 32px rgba(250,204,21,.95)}
-      .sm-pad.wrong{border-color:#991B1B;animation:smShake .35s}
-      .sm-pad .sm-ico{font-size:64px;line-height:1.1}
-      .sm-pad .sm-txt{font-size:30px;font-weight:900;color:#FFF;margin-top:8px;text-shadow:0 2px 4px rgba(0,0,0,.25)}
-      .sm-status{font-size:28px;font-weight:800;color:#1E3A8A;background:#EFF6FF;padding:12px 24px;border-radius:18px;text-align:center}
-      @keyframes smShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
-    `;
-    document.head.appendChild(st);
-  }
+  const old = document.getElementById('simon-style');
+  if (old) old.remove();
+  const st = document.createElement('style');
+  st.id = 'simon-style';
+  st.textContent = `
+    .sm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;width:100%;max-width:680px}
+    .sm-pad{position:relative;min-height:175px;border-radius:28px;border:5px solid rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,filter .12s,opacity .12s,box-shadow .12s;opacity:.72;filter:brightness(.88)}
+    .sm-grid.has-lit .sm-pad:not(.lit){opacity:.2;filter:grayscale(75%) brightness(.55);transform:scale(.94)}
+    .sm-pad:active{transform:scale(.96)}
+    .sm-pad.lit{opacity:1;z-index:2;transform:scale(1.07);filter:brightness(1.3) saturate(1.25);border:6px solid #FFF;box-shadow:0 0 0 6px #1E293B,0 0 38px 10px rgba(250,204,21,.95)}
+    .sm-pad.lit::after{content:'💡 亮燈';position:absolute;top:12px;right:14px;background:#FFF;color:#B45309;font-size:22px;font-weight:900;padding:4px 12px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+    .sm-pad.wrong{opacity:1;border:6px solid #7F1D1D;animation:smShake .35s}
+    .sm-pad .sm-ico{font-size:64px;line-height:1.1;transition:transform .12s}
+    .sm-pad.lit .sm-ico{transform:scale(1.25)}
+    .sm-pad .sm-txt{font-size:30px;font-weight:900;color:#FFF;margin-top:8px;text-shadow:0 2px 4px rgba(0,0,0,.35)}
+    .sm-status{font-size:28px;font-weight:800;color:#1E3A8A;background:#EFF6FF;padding:12px 24px;border-radius:18px;text-align:center}
+    @keyframes smShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+  `;
+  document.head.appendChild(st);
 
   const PADS = [
     { id: 0, name: '紅燈', ico: '🔴', bg: '#EF4444', freq: 261.63 },
@@ -78,10 +81,12 @@
     });
 
     async function flashPad(id, ms = 550) {
+      grid.classList.add('has-lit');
       padEls[id].classList.add('lit');
       GameHub.playTone(PADS[id].freq, ms / 1000, 'sine', 0.28);
       await wait(ms);
       padEls[id].classList.remove('lit');
+      if (!grid.querySelector('.lit')) grid.classList.remove('has-lit');
     }
 
     async function showDemo() {
@@ -95,8 +100,8 @@
       for (let i = 0; i < seq.length; i++) {
         if (!wrap.isConnected) return;
         statusEl.textContent = `👀 示範中：第 ${i + 1} / ${seqLen} 個亮燈`;
-        await flashPad(seq[i], 680);
-        await wait(320);
+        await flashPad(seq[i], 700);
+        await wait(340);
       }
       if (!wrap.isConnected) return;
       mode = 'play';
