@@ -4,29 +4,25 @@
   const st = document.createElement('style');
   st.id = 'sound-order-style';
   st.textContent = `
-    .so-slots{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;width:100%}
-    .so-slot{min-width:150px;padding:12px 18px;border-radius:18px;border:3px dashed #94A3B8;background:#F8FAFC;font-size:24px;font-weight:800;color:#64748B;text-align:center}
+    .so-slots{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;width:100%}
+    .so-slot{min-width:140px;padding:10px 16px;border-radius:16px;border:3px dashed #94A3B8;background:#F8FAFC;font-size:22px;font-weight:800;color:#64748B;text-align:center}
     .so-slot.filled{border-style:solid;border-color:#16A34A;background:#DCFCE7;color:#15803D}
-    .so-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;width:100%;max-width:700px}
-    .so-card{min-height:165px;border-radius:26px;border:4px solid #93C5FD;background:#FFF;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,background .2s,border-color .2s;padding:14px}
+    .so-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;width:100%;max-width:700px}
+    .so-card{min-height:145px;border-radius:24px;border:4px solid #93C5FD;background:#FFF;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,background .2s,border-color .2s;padding:12px}
+    .so-card:last-child:nth-child(odd){grid-column:1 / -1;max-width:340px;width:100%;justify-self:center}
     .so-card:active{transform:scale(.96)}
     .so-card.playing{background:#FEF3C7;border-color:#F59E0B;transform:scale(1.03)}
     .so-card.done{background:#DCFCE7;border-color:#16A34A}
     .so-card.wrong{background:#FEF2F2;border-color:#EF4444}
-    .so-banner{font-size:28px;font-weight:900;color:#1E3A8A;background:#FEF3C7;border:3px solid #F59E0B;padding:14px 26px;border-radius:20px;text-align:center}
+    .so-banner{font-size:26px;font-weight:900;color:#1E3A8A;background:#FEF3C7;border:3px solid #F59E0B;padding:12px 24px;border-radius:20px;text-align:center}
   `;
   document.head.appendChild(st);
 
-  // 使用標準 WAV 媒體播放（避開 iPad Safari AudioContext 被語音中斷的問題）
   const SR = 16000;
   const player = new Audio();
   player.playsInline = true;
   let quizUrl = null;
   let activeTimers = [];
-
-  function setPlaybackSession() {
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-  }
 
   function gen(sec, fn) {
     const a = new Float32Array(Math.floor(SR * sec));
@@ -61,6 +57,10 @@
       let sum = 0;
       notes.forEach((f, idx) => { const u = t - idx * 0.2; if (u >= 0) sum += (Math.sin(2 * Math.PI * f * u) + 0.3 * Math.sin(4 * Math.PI * f * u)) * Math.exp(-u * 5.5) * 0.55; });
       return sum;
+    }) },
+    { id: 'bird', ico: '🐦', name: '小鳥叫聲', pcm: gen(0.9, (t) => {
+      const chirp = (u) => u >= 0 && u < 0.18 ? Math.sin(2 * Math.PI * (1800 + u * 5500) * u) * Math.sin(Math.PI * u / 0.18) * 0.65 : 0;
+      return chirp(t) + chirp(t - 0.28) + chirp(t - 0.56);
     }) }
   ].map((s) => ({ ...s, url: encodeWav(s.pcm) }));
 
@@ -71,10 +71,16 @@
     player.pause();
   }
 
+  function safeSpeak(text) {
+    player.pause();
+    if ('speechSynthesis' in window) {
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    }
+    GameHub.setAIMessage(text, true);
+  }
+
   function playSingle(url) {
-    setPlaybackSession();
     clearPlayTimers();
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     player.src = url;
     player.currentTime = 0;
     player.play().catch(() => {});
@@ -84,7 +90,7 @@
   const heartsHTML = (n) => '❤️'.repeat(Math.max(0, n)) + '🤍'.repeat(Math.max(0, 3 - n));
 
   function sayThen(text, onDone) {
-    GameHub.setAIMessage(text, true);
+    safeSpeak(text);
     let done = false, started = false;
     const t0 = Date.now(), minMs = Math.max(2400, text.length * 210), maxMs = Math.max(5500, text.length * 440);
     const finish = () => { if (done) return; done = true; clearInterval(iv); clearTimeout(tm); onDone(); };
@@ -100,7 +106,7 @@
 
   function playSoundOrder(stage, level, lives) {
     clearPlayTimers();
-    const count = level === 1 ? 2 : level === 2 ? 3 : 4;
+    const count = Math.min(level + 1, 5);
     const seq = shuffle(SOUNDS).slice(0, count);
     const picked = new Map();
     let step = 0, mode = 'preview';
@@ -149,11 +155,8 @@
       });
     }
 
-    // 將整組考題合成單一 WAV 音檔，點擊瞬間立刻開播，100% 相容 iPad
     function playQuizAudio() {
-      setPlaybackSession();
       clearPlayTimers();
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       mode = 'listening';
       bar.style.display = 'none';
       replayBtn.style.display = 'none';
@@ -181,7 +184,7 @@
         mode = 'answer';
         replayBtn.style.display = 'inline-block';
         banner.textContent = `👉 請點選出「第 ${step + 1} 個」聽到的聲音！`;
-        GameHub.setAIMessage(`播完囉！請問第 ${step + 1} 個聽到的是哪一種聲音呢？`, true);
+        safeSpeak(`播完囉！請問第 ${step + 1} 個聽到的是哪一種聲音呢？`);
       };
 
       marks.forEach((sec, idx) => {
@@ -224,12 +227,12 @@
               stage.innerHTML = `<div class="vg-win-box"><div class="vg-win-emoji">🔔🌟🔔</div><h3 class="vg-win-title">第 ${level} 關過關！聽力超棒！</h3><p style="font-size:28px;color:#475569;margin:0 0 28px 0;">${p}</p><div><button class="btn-big green" id="so-next">👉 玩下一關</button><button class="btn-big" style="background:#475569;" onclick="GameHub.goHome()">🏠 回首頁</button></div></div>`;
               document.getElementById('so-next').onclick = () => playSoundOrder(stage, level + 1, lives);
             });
-          }, 950));
+          }, 1000));
         } else {
           banner.textContent = `✅ 答對了！請點選出「第 ${step + 1} 個」聲音！`;
           activeTimers.push(setTimeout(() => {
-            if (wrap.isConnected) GameHub.setAIMessage(`答對了！第 ${step} 個是「${s.name}」，那第 ${step + 1} 個是哪個呢？`, true);
-          }, 1000));
+            if (wrap.isConnected) safeSpeak(`答對了！第 ${step} 個是「${s.name}」，那第 ${step + 1} 個是哪個呢？`);
+          }, 1050));
         }
       } else {
         mode = 'locked';
@@ -256,7 +259,7 @@
     renderCards();
     wrap.querySelector('#so-start').onclick = playQuizAudio;
     replayBtn.onclick = () => { if (mode === 'answer') playQuizAudio(); };
-    GameHub.setAIMessage(`第 ${level} 關！你可以先點下面的卡片試聽這四種聲音，聽熟了再按綠色按鈕開始考你喔！`, true);
+    safeSpeak(`第 ${level} 關！你可以先點下面的卡片試聽這五種聲音，聽熟了再按綠色按鈕開始考你喔！`);
   }
 
   GameHub.registerGame('sound-order', { start: (s) => playSoundOrder(s, 1, 3) });
