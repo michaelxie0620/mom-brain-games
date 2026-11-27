@@ -26,7 +26,6 @@ window.GameHub = (() => {
   let chatHistory = [];
   let currentGameId = null;
 
-  // 麥克風待機與錄音控制
   let micStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
@@ -93,7 +92,7 @@ window.GameHub = (() => {
       if (twVoice) utterance.voice = twVoice;
 
       window.speechSynthesis.speak(utterance);
-    }, 60);
+    }, 80);
   }
 
   function setAIMessage(text, autoSpeak = true) {
@@ -132,18 +131,6 @@ window.GameHub = (() => {
     micBtn.classList.remove('recording');
     micBtn.disabled = false;
     micBtn.textContent = '🎤 點一下說話';
-  }
-
-  async function getMicStream() {
-    if (
-      micStream &&
-      micStream.active &&
-      micStream.getAudioTracks().some((t) => t.readyState === 'live')
-    ) {
-      return micStream;
-    }
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    return micStream;
   }
 
   function releaseMicStream() {
@@ -209,14 +196,24 @@ window.GameHub = (() => {
     const micBtn = document.getElementById('btn-mic');
 
     if (!isRecording) {
-      // 立刻中斷正在播放的語音並給予視覺回饋
+      // 立刻中斷舊語音並改變按鈕外觀，給予零延遲視覺回饋
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       isStartingMic = true;
       micBtn.classList.add('recording');
-      micBtn.textContent = '🎙️ 準備收音...';
+      micBtn.textContent = '🎙️ 開啟麥克風...';
 
       try {
-        const stream = await getMicStream();
+        // 每次錄音取得全新乾淨的音訊串流，避免 iPad Safari 第二次錄音靜音的錯誤
+        releaseMicStream();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // 若開啟途中已按回首頁，立刻釋放麥克風
+        if (!isStartingMic) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        micStream = stream;
+
         const preferredTypes = ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'];
         const supportedType = preferredTypes.find((t) => MediaRecorder.isTypeSupported(t)) || '';
 
@@ -230,11 +227,14 @@ window.GameHub = (() => {
         };
 
         mediaRecorder.onstop = async () => {
+          // 錄完立刻釋放麥克風，確保 AI 語音播報大聲且下一句收音正常
+          releaseMicStream();
+
           const actualMime = mediaRecorder.mimeType || 'audio/mp4';
           const blob = new Blob(audioChunks, { type: actualMime });
 
-          if (blob.size < 1000) {
-            showToast('聲音太短了，請再說一次喔！');
+          if (blob.size < 200) {
+            showToast('沒有收到聲音，請再點一次說話喔！');
             resetMicButton();
             return;
           }
@@ -251,11 +251,11 @@ window.GameHub = (() => {
           reader.readAsDataURL(blob);
         };
 
-        mediaRecorder.start();
+        // 每 250 毫秒分段收音，避免 Safari 結束錄音時遺失音檔
+        mediaRecorder.start(250);
         isRecording = true;
         isStartingMic = false;
         micBtn.textContent = '⏹️ 講完了點我送出';
-        playTone(880, 0.08, 'sine', 0.15); // 輕脆提示音：可以開始說話
       } catch (err) {
         isStartingMic = false;
         isRecording = false;
@@ -271,6 +271,7 @@ window.GameHub = (() => {
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       } else {
+        releaseMicStream();
         resetMicButton();
       }
     }
@@ -344,12 +345,12 @@ window.GameHub = (() => {
   }
 
   function goHome() {
+    isStartingMic = false;
     if (isRecording && mediaRecorder) {
       isRecording = false;
       mediaRecorder.onstop = null;
       if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
-    isStartingMic = false;
     releaseMicStream();
     resetMicButton();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
