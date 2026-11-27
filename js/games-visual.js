@@ -1,43 +1,112 @@
 (() => {
-  if (!document.getElementById('visual-games-style')) {
-    const style = document.createElement('style');
-    style.id = 'visual-games-style';
-    style.textContent = `
-      .vg-wrap { width: 100%; max-width: 780px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-      .vg-header { display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px; }
-      .vg-badge { background: #E0F2FE; color: #0369A1; padding: 8px 18px; border-radius: 999px; font-size: 22px; font-weight: 800; }
-      .vg-sub-btn { background: #FEF3C7; color: #92400E; border: 2px solid #F59E0B; padding: 8px 18px; border-radius: 14px; font-size: 20px; font-weight: 800; cursor: pointer; }
-      .vg-grid { display: grid; gap: 14px; width: 100%; justify-items: center; }
-      .vg-card {
-        width: 100%; min-height: 115px; border-radius: 20px; border: 3px solid #93C5FD;
-        background: #EFF6FF; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        cursor: pointer; transition: transform 0.15s, background 0.2s; padding: 10px;
-      }
-      .vg-card:active { transform: scale(0.95); }
-      .vg-card.flipped { background: #FFFFFF; border-color: #2563EB; }
-      .vg-card.matched { background: #DCFCE7; border-color: #16A34A; opacity: 0.9; }
-      .vg-card.selected { background: #FEF3C7; border-color: #D97706; transform: scale(1.03); }
-      .vg-emoji { font-size: 46px; line-height: 1.1; }
-      .vg-label { font-size: 22px; font-weight: 800; color: #1E293B; margin-top: 4px; }
-      .vg-back { font-size: 40px; color: #3B82F6; }
-      .vg-win-box { text-align: center; padding: 20px; animation: vgPop 0.35s ease; }
-      .vg-win-emoji { font-size: 80px; margin-bottom: 10px; }
-      .vg-win-title { font-size: 34px; font-weight: 900; color: #15803D; margin: 0 0 12px 0; }
-      .vg-poker-num { font-size: 44px; font-weight: 900; line-height: 1; }
-      .vg-poker-suit { font-size: 26px; margin-top: 2px; }
-      .vg-red { color: #DC2626; }
-      .vg-black { color: #1E293B; }
-      .vg-item-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; width: 100%; }
-      .vg-item-pill {
-        background: #F8FAFC; border: 3px solid #CBD5E1; border-radius: 20px;
-        padding: 14px 18px; min-width: 120px; display: flex; flex-direction: column; align-items: center;
-      }
-      .vg-item-pill.done { background: #DCFCE7; border-color: #16A34A; }
-      .vg-action-bar { width: 100%; display: flex; justify-content: center; margin-top: 8px; }
-      @keyframes vgPop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    `;
-    document.head.appendChild(style);
-  }
+  // 動態注入大字體、大卡片長輩友善樣式
+  const oldStyle = document.getElementById('visual-games-style');
+  if (oldStyle) oldStyle.remove();
+
+  const style = document.createElement('style');
+  style.id = 'visual-games-style';
+  style.textContent = `
+    .vg-wrap {
+      width: 100%;
+      max-width: 920px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .vg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .vg-badge {
+      background: #E0F2FE;
+      color: #0369A1;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-size: 26px;
+      font-weight: 800;
+    }
+    .vg-sub-btn {
+      background: #FEF3C7;
+      color: #92400E;
+      border: 3px solid #F59E0B;
+      padding: 10px 22px;
+      border-radius: 16px;
+      font-size: 24px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .vg-grid {
+      display: grid;
+      gap: 18px;
+      width: 100%;
+      justify-items: center;
+    }
+    .vg-card {
+      width: 100%;
+      min-height: 190px;
+      border-radius: 26px;
+      border: 4px solid #93C5FD;
+      background: #EFF6FF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s, background 0.2s, border-color 0.2s;
+      padding: 14px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+    }
+    .vg-grid.dense .vg-card {
+      min-height: 150px;
+      padding: 10px;
+    }
+    .vg-card:active { transform: scale(0.96); }
+    .vg-card.flipped { background: #FFFFFF; border-color: #2563EB; }
+    .vg-card.matched { background: #DCFCE7; border-color: #16A34A; }
+    .vg-card.wrong { background: #FEF2F2; border-color: #EF4444; }
+    .vg-emoji { font-size: 76px; line-height: 1.1; }
+    .vg-grid.dense .vg-emoji { font-size: 62px; }
+    .vg-label { font-size: 30px; font-weight: 800; color: #1E293B; margin-top: 8px; }
+    .vg-grid.dense .vg-label { font-size: 26px; margin-top: 4px; }
+    .vg-back { font-size: 64px; font-weight: 900; color: #2563EB; }
+    .vg-grid.dense .vg-back { font-size: 52px; }
+    .vg-poker-num { font-size: 72px; font-weight: 900; line-height: 1; }
+    .vg-grid.dense .vg-poker-num { font-size: 58px; }
+    .vg-poker-suit { font-size: 38px; margin-top: 6px; }
+    .vg-grid.dense .vg-poker-suit { font-size: 30px; }
+    .vg-red { color: #DC2626; }
+    .vg-black { color: #1E293B; }
+    .vg-item-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 18px;
+      width: 100%;
+    }
+    .vg-item-pill {
+      background: #F8FAFC;
+      border: 4px solid #CBD5E1;
+      border-radius: 24px;
+      padding: 18px 24px;
+      min-width: 155px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .vg-item-pill .vg-emoji { font-size: 68px; }
+    .vg-item-pill .vg-label { font-size: 28px; }
+    .vg-action-bar { width: 100%; display: flex; justify-content: center; margin-top: 8px; }
+    .vg-win-box { text-align: center; padding: 24px; animation: vgPop 0.35s ease; }
+    .vg-win-emoji { font-size: 90px; margin-bottom: 12px; }
+    .vg-win-title { font-size: 38px; font-weight: 900; color: #15803D; margin: 0 0 14px 0; }
+    @keyframes vgPop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  `;
+  document.head.appendChild(style);
 
   function shuffle(arr) {
     const a = [...arr];
@@ -53,7 +122,7 @@
       <div class="vg-win-box">
         <div class="vg-win-emoji">🎉🌟🎉</div>
         <h3 class="vg-win-title">${title}</h3>
-        <p style="font-size:24px; color:#475569; margin:0 0 24px 0;">${subText}</p>
+        <p style="font-size:28px; color:#475569; margin:0 0 28px 0;">${subText}</p>
         <div>
           <button class="btn-big green" id="vg-btn-next">👉 玩下一關</button>
           <button class="btn-big" style="background:#475569;" onclick="GameHub.goHome()">🏠 回首頁</button>
@@ -64,7 +133,7 @@
   }
 
   // =========================================================================
-  // 遊戲 1：翻牌配對（手動決定何時蓋牌，完全零時間壓力）
+  // 遊戲 1：翻牌配對（超大牌面 + 全程語音回饋 + 翻錯慢速停留提醒）
   // =========================================================================
   const MEMORY_THEMES = [
     {
@@ -110,7 +179,8 @@
       ...item,
       uid: idx,
       flipped: false,
-      matched: false
+      matched: false,
+      wrong: false
     }));
 
     let flippedCards = [];
@@ -119,6 +189,7 @@
     let hasStarted = false;
 
     const cols = pairCount === 3 ? 3 : 4;
+    const isDense = pairCount >= 6;
     const wrap = document.createElement('div');
     wrap.className = 'vg-wrap';
     wrap.innerHTML = `
@@ -126,7 +197,7 @@
         <span class="vg-badge">第 ${memoryLevel} 關｜${theme.name}（${pairCount} 對）</span>
         <button class="vg-sub-btn" id="mm-peek" style="display:none;">👀 偷看一下</button>
       </div>
-      <div class="vg-grid" id="mm-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
+      <div class="vg-grid ${isDense ? 'dense' : ''}" id="mm-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
       <div class="vg-action-bar" id="mm-action-bar">
         <button class="btn-big green" id="mm-cover-btn">👀 我記好了，蓋起來開始玩！</button>
       </div>
@@ -144,10 +215,11 @@
       deck.forEach((card) => {
         const btn = document.createElement('button');
         const show = forceReveal || card.flipped || card.matched;
-        btn.className = `vg-card ${card.matched ? 'matched' : show ? 'flipped' : ''}`;
+        const stateCls = card.matched ? 'matched' : card.wrong ? 'wrong' : show ? 'flipped' : '';
+        btn.className = `vg-card ${stateCls}`;
         btn.innerHTML = show
           ? `<div class="vg-emoji">${card.emoji}</div><div class="vg-label">${card.label}</div>`
-          : `<div class="vg-back">❓</div>`;
+          : `<div class="vg-back">？</div>`;
         btn.onclick = () => onCardClick(card);
         grid.appendChild(btn);
       });
@@ -169,40 +241,47 @@
           matchedPairs += 1;
           flippedCards = [];
           GameHub.playSuccess();
-          setTimeout(() => {
-            if (!wrap.isConnected) return;
-            renderDeck();
-            isLocked = false;
-            if (matchedPairs === pairCount) {
-              const praise = GameHub.randomPraise();
-              GameHub.setAIMessage(`${praise} 全部 ${pairCount} 對都找到了！`, true);
-              GameHub.onRoundComplete(1);
-              setTimeout(() => {
-                if (!wrap.isConnected) return;
-                renderWin(stage, `第 ${memoryLevel} 關過關！`, praise, () => {
-                  memoryLevel += 1;
-                  playMemoryRound(stage);
-                });
-              }, 800);
-            } else {
-              GameHub.setAIMessage(`水喔！找到「${a.label}」了，繼續找下一對！`, false);
-            }
-          }, 300);
+          renderDeck();
+
+          if (matchedPairs === pairCount) {
+            const praise = GameHub.randomPraise();
+            GameHub.setAIMessage(`${praise} 全部 ${pairCount} 對都找到了！`, true);
+            GameHub.onRoundComplete(1);
+            setTimeout(() => {
+              if (!wrap.isConnected) return;
+              renderWin(stage, `第 ${memoryLevel} 關過關！`, praise, () => {
+                memoryLevel += 1;
+                playMemoryRound(stage);
+              });
+            }, 1600);
+          } else {
+            GameHub.setAIMessage(`水喔！找到「${a.label}」了，繼續找下一對！`, true);
+            setTimeout(() => {
+              if (!wrap.isConnected) return;
+              isLocked = false;
+            }, 400);
+          }
         } else {
+          // 翻錯時亮紅框，停留 2.8 秒並語音引導
+          a.wrong = true;
+          b.wrong = true;
+          renderDeck();
           GameHub.playGentleTryAgain();
+          GameHub.setAIMessage(`翻到「${a.label}」和「${b.label}」，不一樣喔，看清楚位置再試一次！`, true);
           setTimeout(() => {
             if (!wrap.isConnected) return;
             a.flipped = false;
             b.flipped = false;
+            a.wrong = false;
+            b.wrong = false;
             flippedCards = [];
             renderDeck();
             isLocked = false;
-          }, 900);
+          }, 2800);
         }
       }
     }
 
-    // 玩家自行按下「蓋起來」按鈕
     coverBtn.onclick = () => {
       GameHub.playTone(440, 0.12);
       actionBar.style.display = 'none';
@@ -217,7 +296,6 @@
       }
     };
 
-    // 偷看按鈕：打開後也是等玩家自己按蓋起來
     peekBtn.onclick = () => {
       if (isLocked) return;
       isLocked = true;
@@ -228,13 +306,12 @@
       GameHub.setAIMessage('慢慢看沒關係，記起來了再按下面的綠色按鈕蓋起來喔！', true);
     };
 
-    // 開局全部亮出來，完全不倒數
     renderDeck(true);
     GameHub.setAIMessage(`第 ${memoryLevel} 關！請慢慢記住圖案的位置，記好了再按下面的綠色按鈕蓋起來喔！`, true);
   }
 
   // =========================================================================
-  // 遊戲 2：少了哪一樣（視覺觀察與提取，無倒數壓力）
+  // 遊戲 2：少了哪一樣（超大圖示 + 全程語音提示）
   // =========================================================================
   const DAILY_ITEMS = [
     { emoji: '🔑', label: '鑰匙' }, { emoji: '👓', label: '眼鏡' },
@@ -308,8 +385,8 @@
             <div class="vg-label" style="color:#B45309;">不見了</div>
           </div>
         </div>
-        <p style="font-size:26px; font-weight:800; color:#1E3A8A; margin:12px 0 4px 0;">請問少了下面哪一樣？</p>
-        <div class="vg-grid" style="grid-template-columns: repeat(2, 1fr); max-width:560px;" id="wm-opts"></div>
+        <p style="font-size:28px; font-weight:800; color:#1E3A8A; margin:10px 0 2px 0;">請問少了下面哪一樣？</p>
+        <div class="vg-grid dense" style="grid-template-columns: repeat(2, 1fr); max-width:680px;" id="wm-opts"></div>
       `;
 
       wrap.querySelector('#wm-back').onclick = showObservePhase;
@@ -332,10 +409,11 @@
                 missingLevel += 1;
                 playMissingRound(stage);
               });
-            }, 900);
+            }, 1400);
           } else {
             GameHub.playGentleTryAgain();
-            btn.style.opacity = '0.45';
+            btn.classList.add('wrong');
+            btn.style.opacity = '0.5';
             btn.disabled = true;
             GameHub.setAIMessage(`不是「${opt.label}」喔，剛才桌上沒有它，再想想看！`, true);
           }
@@ -348,7 +426,7 @@
   }
 
   // =========================================================================
-  // 遊戲 3：幫 AI 買菜（家常料理菜單，多項工作記憶）
+  // 遊戲 3：幫 AI 買菜（大格攤位 + 每買一樣都有語音稱讚）
   // =========================================================================
   const RECIPES = [
     { dish: '三杯雞', items: [{ emoji: '🍗', label: '雞肉' }, { emoji: '🌿', label: '九層塔' }, { emoji: '🧄', label: '大蒜' }, { emoji: '🫙', label: '醬油' }] },
@@ -392,7 +470,7 @@
         <div class="vg-header">
           <span class="vg-badge">第 ${groceryLevel} 關｜今天想做「${recipe.dish}」</span>
         </div>
-        <p style="font-size:26px; font-weight:800; margin:4px 0;">請幫忙記住這 ${targetCount} 樣食材：</p>
+        <p style="font-size:28px; font-weight:800; margin:4px 0;">請幫忙記住這 ${targetCount} 樣食材：</p>
         <div class="vg-item-row">
           ${targets.map((it) => `
             <div class="vg-item-pill" style="background:#FFFBEB; border-color:#F59E0B;">
@@ -414,12 +492,12 @@
           <span class="vg-badge" id="gs-progress">菜市場攤位｜已買到 ${bought.size} / ${targetCount} 樣</span>
           <button class="vg-sub-btn" id="gs-peek">👀 偷看菜單</button>
         </div>
-        <div class="vg-grid" style="grid-template-columns: repeat(3, 1fr);" id="gs-grid"></div>
+        <div class="vg-grid dense" style="grid-template-columns: repeat(3, 1fr);" id="gs-grid"></div>
       `;
 
       wrap.querySelector('#gs-peek').onclick = () => {
         const names = targets.map((t) => t.label).join('、');
-        GameHub.showToast(`菜單是：${names}`, 3500);
+        GameHub.showToast(`菜單是：${names}`, 4000);
         GameHub.setAIMessage(`別擔心，菜單是：${names}喔！`, true);
       };
 
@@ -451,13 +529,19 @@
                   groceryLevel += 1;
                   playGroceryRound(stage);
                 });
-              }, 800);
+              }, 1500);
             } else {
-              GameHub.setAIMessage(`買到「${item.label}」了！還差 ${targetCount - bought.size} 樣喔！`, false);
+              GameHub.setAIMessage(`買到「${item.label}」了！還差 ${targetCount - bought.size} 樣喔！`, true);
             }
           } else {
             GameHub.playGentleTryAgain();
+            btn.className = 'vg-card wrong';
             GameHub.setAIMessage(`今天做${recipe.dish}不需要「${item.label}」喔，再找找看！`, true);
+            setTimeout(() => {
+              if (btn.isConnected && !bought.has(item.label)) {
+                btn.className = 'vg-card flipped';
+              }
+            }, 1500);
           }
         };
         grid.appendChild(btn);
@@ -470,7 +554,7 @@
   }
 
   // =========================================================================
-  // 遊戲 4：簡易撿紅點（手動決定何時蓋牌，翻牌湊 10）
+  // 遊戲 4：簡易撿紅點（超大撲克牌 + 全程語音引導 + 翻錯停留 2.8 秒）
   // =========================================================================
   const TEN_PAIRS = [
     [1, 9], [2, 8], [3, 7], [4, 6], [5, 5]
@@ -506,7 +590,8 @@
       ...c,
       uid: idx,
       flipped: false,
-      matched: false
+      matched: false,
+      wrong: false
     }));
 
     let flippedCards = [];
@@ -514,7 +599,8 @@
     let matchedPairs = 0;
     let hasStarted = false;
 
-    const cols = pairCount === 3 ? 3 : pairCount === 4 ? 4 : 5;
+    const cols = pairCount === 3 ? 3 : 4;
+    const isDense = pairCount >= 5;
     const wrap = document.createElement('div');
     wrap.className = 'vg-wrap';
     wrap.innerHTML = `
@@ -522,7 +608,7 @@
         <span class="vg-badge">第 ${tenLevel} 關｜兩張加起來等於 10</span>
         <button class="vg-sub-btn" id="mt-peek" style="display:none;">👀 偷看一下</button>
       </div>
-      <div class="vg-grid" id="mt-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
+      <div class="vg-grid ${isDense ? 'dense' : ''}" id="mt-grid" style="grid-template-columns: repeat(${cols}, 1fr);"></div>
       <div class="vg-action-bar" id="mt-action-bar">
         <button class="btn-big green" id="mt-cover-btn">👀 我記好了，蓋起來開始玩！</button>
       </div>
@@ -540,7 +626,8 @@
       deck.forEach((card) => {
         const btn = document.createElement('button');
         const show = forceReveal || card.flipped || card.matched;
-        btn.className = `vg-card ${card.matched ? 'matched' : show ? 'flipped' : ''}`;
+        const stateCls = card.matched ? 'matched' : card.wrong ? 'wrong' : show ? 'flipped' : '';
+        btn.className = `vg-card ${stateCls}`;
         if (show) {
           const colorCls = card.isRed ? 'vg-red' : 'vg-black';
           btn.innerHTML = `
@@ -564,7 +651,7 @@
 
       if (flippedCards.length === 1) {
         const need = 10 - card.num;
-        GameHub.setAIMessage(`翻到 ${card.num} 了，找找看哪一張加起來等於 10 呢？（需要 ${need}）`, false);
+        GameHub.setAIMessage(`翻到 ${card.num} 了，找找看哪一張是 ${need} 湊成 10 呢？`, true);
         return;
       }
 
@@ -577,37 +664,42 @@
           matchedPairs += 1;
           flippedCards = [];
           GameHub.playSuccess();
+          renderDeck();
 
-          setTimeout(() => {
-            if (!wrap.isConnected) return;
-            renderDeck();
-            isLocked = false;
-            if (matchedPairs === pairCount) {
-              const praise = GameHub.randomPraise();
-              GameHub.setAIMessage(`${praise} 所有湊成 10 的牌都收光光了！`, true);
-              GameHub.onRoundComplete(1);
-              setTimeout(() => {
-                if (!wrap.isConnected) return;
-                renderWin(stage, `第 ${tenLevel} 關過關！心算超強！`, praise, () => {
-                  tenLevel += 1;
-                  playMakeTenRound(stage);
-                });
-              }, 800);
-            } else {
-              GameHub.setAIMessage(`水喔！${a.num} 加 ${b.num} 等於 10，收走一對！`, false);
-            }
-          }, 320);
+          if (matchedPairs === pairCount) {
+            const praise = GameHub.randomPraise();
+            GameHub.setAIMessage(`${praise} 所有湊成 10 的牌都收光光了！`, true);
+            GameHub.onRoundComplete(1);
+            setTimeout(() => {
+              if (!wrap.isConnected) return;
+              renderWin(stage, `第 ${tenLevel} 關過關！心算超強！`, praise, () => {
+                tenLevel += 1;
+                playMakeTenRound(stage);
+              });
+            }, 1600);
+          } else {
+            GameHub.setAIMessage(`水喔！${a.num} 加 ${b.num} 等於 10，收走一對！`, true);
+            setTimeout(() => {
+              if (!wrap.isConnected) return;
+              isLocked = false;
+            }, 400);
+          }
         } else {
+          a.wrong = true;
+          b.wrong = true;
+          renderDeck();
           GameHub.playGentleTryAgain();
-          GameHub.setAIMessage(`${a.num} 加 ${b.num} 是 ${a.num + b.num}，差一點點，再試一次看看！`, false);
+          GameHub.setAIMessage(`${a.num} 加 ${b.num} 是 ${a.num + b.num}，還沒湊到 10 喔，看清楚位置再試一次！`, true);
           setTimeout(() => {
             if (!wrap.isConnected) return;
             a.flipped = false;
             b.flipped = false;
+            a.wrong = false;
+            b.wrong = false;
             flippedCards = [];
             renderDeck();
             isLocked = false;
-          }, 1000);
+          }, 2800);
         }
       }
     }
