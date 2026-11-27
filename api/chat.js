@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 請嚴格遵守以下規則：
 1. 媽媽可能會講「台語」、「台灣國語」或夾雜台語詞彙。收到語音時請直接用心理解意思，絕不抱怨聽不懂或糾正她的發音。
 2. 回覆請使用親切、自然的「台灣繁體中文口語」，可自然帶入「真厲害」、「水喔」、「免緊張」、「慢慢來」等溫暖詞彙。
-3. 每次回覆控制在 45 個中文字以內，不要使用條列式符號、表情符號或複雜成語（因為系統會直接用語音唸出來）。
+3. 每次回覆控制在 45 個中文字以內，不使用條列式符號、表情符號或複雜成語（因為系統會直接用語音唸出來）。
 4. 永遠給予正向鼓勵，讓媽媽玩得開心有自信。
 ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     `.trim();
@@ -42,10 +42,13 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     ];
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
@@ -56,7 +59,8 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     const data = await response.json();
     if (!response.ok) {
-      return res.status(502).json({ error: 'AI 暫時忙碌中，請稍後再試' });
+      console.error('Gemini API Error:', data);
+      return res.status(502).json({ error: data?.error?.message || 'AI 暫時忙碌中' });
     }
 
     const reply =
@@ -65,6 +69,7 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     return res.status(200).json({ reply });
   } catch (err) {
+    console.error('Server Error:', err);
     return res.status(500).json({ error: '連線發生異常' });
   }
-}
+};
