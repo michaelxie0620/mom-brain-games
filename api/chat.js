@@ -1,10 +1,8 @@
 let cachedModels = null;
 let cacheTimestamp = 0;
 
-// 自動向 Google 查詢此金鑰目前可用的 Gemini 模型，並依速度排序
 async function getCandidateModels(apiKey) {
   const now = Date.now();
-  // 快取 10 分鐘，不用每次聊天都重複查詢
   if (cachedModels && now - cacheTimestamp < 10 * 60 * 1000) {
     return cachedModels;
   }
@@ -39,7 +37,6 @@ async function getCandidateModels(apiKey) {
 
     if (models.length === 0) return fallbackList;
 
-    // 排序：優先選最不塞車的 flash-lite -> 其他 flash -> pro -> 剛才塞車的 3.8-flash
     models.sort((a, b) => {
       const rank = (name) => {
         if (name === 'gemini-3.8-flash') return 40;
@@ -50,7 +47,6 @@ async function getCandidateModels(apiKey) {
       };
       const diff = rank(a) - rank(b);
       if (diff !== 0) return diff;
-      // 同類型優先選版本號較新的
       return b.localeCompare(a);
     });
 
@@ -76,11 +72,12 @@ module.exports = async function handler(req, res) {
     const { text, audioBase64, mimeType, gameContext, history = [] } = req.body;
 
     const systemInstruction = `
-你是一位溫暖、有耐心、講話親切的台灣晚輩，正在「樂齡健腦小樂園」裡陪媽媽玩健腦小遊戲並聊天。
+你是一位溫暖、有耐心、講話親切的台灣聊天夥伴，正在「樂齡健腦小樂園」裡陪使用者玩健腦小遊戲並聊天。
 規則：
-1. 媽媽可能會講「台語」、「台灣國語」或夾雜台語詞彙。收到語音時請直接理解意思，絕不抱怨聽不懂或糾正發音。
-2. 回覆使用親切自然的「台灣繁體中文口語」，可自然帶入「真厲害」、「水喔」、「免緊張」等溫暖詞彙。
-3. 每次回覆控制在 35 個中文字以內，不使用表情符號或列表符號（系統會直接用語音唸出來）。
+1. 稱呼對方時請一律使用「你」，絕對不要稱呼對方為「媽媽」、「爸爸」、「阿公」、「阿嬤」，也不要預設對方的性別或家庭身分。
+2. 對方可能會講「台語」、「台灣國語」或夾雜台語詞彙。收到語音時請直接理解意思，絕不抱怨聽不懂或糾正發音。
+3. 回覆使用親切自然的「台灣繁體中文口語」，可自然帶入「真厲害」、「水喔」、「免緊張」、「慢慢來」等溫暖詞彙。
+4. 每次回覆控制在 35 個中文字以內，不使用表情符號或列表符號（系統會直接用語音唸出來）。
 ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     `.trim();
 
@@ -90,7 +87,7 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
       if (cleanMimeType === 'audio/mp4') cleanMimeType = 'video/mp4';
       userParts.push({ inlineData: { mimeType: cleanMimeType, data: audioBase64 } });
       userParts.push({
-        text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應媽媽。'
+        text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應對方，並統一用「你」稱呼對方。'
       });
     } else if (text) {
       userParts.push({ text });
