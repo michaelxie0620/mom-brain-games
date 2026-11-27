@@ -115,7 +115,7 @@ window.GameHub = (() => {
     playSuccess();
   }
 
-  function showToast(msg, duration = 2600) {
+  function showToast(msg, duration = 4000) {
     const toast = document.getElementById('toast');
     toast.textContent = msg;
     toast.classList.remove('hidden');
@@ -145,8 +145,17 @@ window.GameHub = (() => {
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '連線錯誤');
+      const rawText = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error('伺服器回應格式異常 (' + res.status + ')');
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || '連線錯誤 (' + res.status + ')');
+      }
 
       if (text) chatHistory.push({ role: 'user', parts: [{ text }] });
       chatHistory.push({ role: 'model', parts: [{ text: data.reply }] });
@@ -154,7 +163,9 @@ window.GameHub = (() => {
       setAIMessage(data.reply, true);
       return data.reply;
     } catch (err) {
-      showToast('網路有點慢，再試一次看看喔！');
+      const reason = err.message || '未知錯誤';
+      showToast('連線失敗：' + reason, 5000);
+      setAIMessage('（系統提示：' + reason + '）', false);
       return null;
     } finally {
       isWaitingAI = false;
