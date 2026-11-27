@@ -13,54 +13,77 @@ module.exports = async function handler(req, res) {
 
     const systemInstruction = `
 你是一位溫暖、有耐心、講話親切的台灣晚輩，正在「樂齡健腦小樂園」裡陪媽媽玩健腦小遊戲並聊天。
-請嚴格遵守以下規則：
-1. 媽媽可能會講「台語」、「台灣國語」或夾雜台語詞彙。收到語音時請直接用心理解意思，絕不抱怨聽不懂或糾正她的發音。
-2. 回覆請使用親切、自然的「台灣繁體中文口語」，可自然帶入「真厲害」、「水喔」、「免緊張」、「慢慢來」等溫暖詞彙。
-3. 每次回覆控制在 45 個中文字以內，不使用條列式符號、表情符號或複雜成語（因為系統會直接用語音唸出來）。
-4. 永遠給予正向鼓勵，讓媽媽玩得開心有自信。
+規則：
+1. 媽媽可能會講「台語」、「台灣國語」或夾雜台語詞彙。收到語音時請直接理解意思，絕不抱怨聽不懂或糾正發音。
+2. 回覆使用親切自然的「台灣繁體中文口語」，可自然帶入「真厲害」、「水喔」、「免緊張」等溫暖詞彙。
+3. 每次回覆控制在 35 個中文字以內，不使用表情符號或列表符號（系統會直接用語音唸出來）。
 ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
     `.trim();
 
     const userParts = [];
     if (audioBase64 && mimeType) {
       const cleanMimeType = mimeType.split(';')[0].trim();
-      userParts.push({
-        inlineData: { mimeType: cleanMimeType, data: audioBase64 }
-      });
-      userParts.push({
-        text: text || '請聽這段語音（可能是台語或國語），理解意思後用親切簡短的台灣口語回應媽媽。'
-      });
+      userParts.push({ inlineData: { mimeType: cleanMimeType, data: audioBase64 } });
+      userParts.push({ text: text || '請聽這段語音（可能是台語或國語），用親切簡短的台灣口語回應媽媽。' });
     } else if (text) {
       userParts.push({ text });
     } else {
       return res.status(400).json({ error: '缺少對話內容' });
     }
 
-    const contents = [
-      ...history.slice(-6),
-      { role: 'user', parts: userParts }
+    const contents = [...history.slice(-4), { role: 'user', parts: userParts }];
+
+    // 優先用速度最快、不塞車的 Lite 模型；若不支援再自動切換主模型
+    const attempts = [
+      { model: 'gemini-3.8-flash-lite', disableThinking: true },
+      { model: 'gemini-3.8-flash', disableThinking: true },
+      { model: 'gemini-3.8-flash', disableThinking: false }
     ];
 
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          generationConfig: { temperature: 0.75, maxOutputTokens: 180 }
-        })
-      }
-    );
+    let response;
+    let data = {};
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('Gemini API Error:', data);
-      return res.status(502).json({ error: data?.error?.message || 'AI 暫時忙碌中' });
+    for (const item of attempts) {
+      const genConfig = {
+        temperature: 0.7,
+        maxOutputTokens: 100
+      };
+      if (item.disableThinking) {
+        genConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 最多等 5 秒，絕不乾等 10 秒
+
+      try {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${item.model}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents,
+              generationConfig: genConfig
+            }),
+            signal: controller.signal
+          }
+        );
+        clearTimeout(timeoutId);
+        data = await response.json();
+        if (response.ok) break;
+      } catch (e) {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    if (!response || !response.ok) {
+      return res.status(200).json({
+        reply: '哎呀，剛剛線上剛好有點忙，再按一次跟我說好嗎？'
+      });
     }
 
     const reply =
@@ -69,7 +92,6 @@ ${gameContext ? `\n【目前遊戲情境】：${gameContext}` : ''}
 
     return res.status(200).json({ reply });
   } catch (err) {
-    console.error('Server Error:', err);
     return res.status(500).json({ error: '連線發生異常' });
   }
 };
