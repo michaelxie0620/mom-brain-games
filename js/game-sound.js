@@ -1,31 +1,87 @@
 (() => {
-  if (!document.getElementById('sound-order-style')) {
-    const st = document.createElement('style');
-    st.id = 'sound-order-style';
-    st.textContent = `
-      .so-slots{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;width:100%}
-      .so-slot{min-width:150px;padding:12px 18px;border-radius:18px;border:3px dashed #94A3B8;background:#F8FAFC;font-size:24px;font-weight:800;color:#64748B;text-align:center}
-      .so-slot.filled{border-style:solid;border-color:#16A34A;background:#DCFCE7;color:#15803D}
-      .so-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;width:100%;max-width:700px}
-      .so-card{min-height:165px;border-radius:26px;border:4px solid #93C5FD;background:#FFF;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,background .2s,border-color .2s;padding:14px}
-      .so-card:active{transform:scale(.96)}
-      .so-card.done{background:#DCFCE7;border-color:#16A34A}
-      .so-card.wrong{background:#FEF2F2;border-color:#EF4444}
-      .so-banner{font-size:28px;font-weight:900;color:#1E3A8A;background:#FEF3C7;border:3px solid #F59E0B;padding:14px 26px;border-radius:20px;text-align:center}
-    `;
-    document.head.appendChild(st);
+  const old = document.getElementById('sound-order-style');
+  if (old) old.remove();
+  const st = document.createElement('style');
+  st.id = 'sound-order-style';
+  st.textContent = `
+    .so-slots{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;width:100%}
+    .so-slot{min-width:150px;padding:12px 18px;border-radius:18px;border:3px dashed #94A3B8;background:#F8FAFC;font-size:24px;font-weight:800;color:#64748B;text-align:center}
+    .so-slot.filled{border-style:solid;border-color:#16A34A;background:#DCFCE7;color:#15803D}
+    .so-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;width:100%;max-width:700px}
+    .so-card{min-height:165px;border-radius:26px;border:4px solid #93C5FD;background:#FFF;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,background .2s,border-color .2s;padding:14px}
+    .so-card:active{transform:scale(.96)}
+    .so-card.playing{background:#FEF3C7;border-color:#F59E0B;transform:scale(1.03)}
+    .so-card.done{background:#DCFCE7;border-color:#16A34A}
+    .so-card.wrong{background:#FEF2F2;border-color:#EF4444}
+    .so-banner{font-size:28px;font-weight:900;color:#1E3A8A;background:#FEF3C7;border:3px solid #F59E0B;padding:14px 26px;border-radius:20px;text-align:center}
+  `;
+  document.head.appendChild(st);
+
+  // 使用標準 WAV 媒體播放（避開 iPad Safari AudioContext 被語音中斷的問題）
+  const SR = 16000;
+  const player = new Audio();
+  player.playsInline = true;
+  let quizUrl = null;
+  let activeTimers = [];
+
+  function setPlaybackSession() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  }
+
+  function gen(sec, fn) {
+    const a = new Float32Array(Math.floor(SR * sec));
+    for (let i = 0; i < a.length; i++) a[i] = fn(i / SR);
+    return a;
+  }
+
+  function encodeWav(samples) {
+    const len = samples.length, buf = new ArrayBuffer(44 + len * 2), v = new DataView(buf);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0, 'RIFF'); v.setUint32(4, 36 + len * 2, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true); ws(36, 'data'); v.setUint32(40, len * 2, true);
+    for (let i = 0; i < len; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+    }
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   }
 
   const SOUNDS = [
-    { id: 'bell', ico: '🔔', name: '門鈴叮咚', play: () => { GameHub.playTone(659.25, 0.28, 'sine', 0.28); setTimeout(() => GameHub.playTone(523.25, 0.45, 'sine', 0.28), 320); } },
-    { id: 'phone', ico: '☎️', name: '電話鈴聲', play: () => { [0, 140, 280, 420].forEach((t, i) => setTimeout(() => GameHub.playTone(i % 2 ? 1050 : 880, 0.11, 'triangle', 0.2), t)); } },
-    { id: 'horn', ico: '🎺', name: '車子喇叭', play: () => { GameHub.playTone(220, 0.22, 'sawtooth', 0.12); setTimeout(() => GameHub.playTone(220, 0.3, 'sawtooth', 0.12), 300); } },
-    { id: 'piano', ico: '🎹', name: '鋼琴旋律', play: () => { [523, 587, 659, 784].forEach((f, i) => setTimeout(() => GameHub.playTone(f, 0.18, 'sine', 0.26), i * 165)); } }
-  ];
+    { id: 'bell', ico: '🔔', name: '門鈴叮咚', pcm: gen(1.0, (t) => t < 0.38
+      ? (Math.sin(2 * Math.PI * 659.25 * t) * Math.exp(-t * 4.5) * 0.75 + Math.sin(2 * Math.PI * 1318.5 * t) * Math.exp(-t * 8) * 0.2)
+      : (Math.sin(2 * Math.PI * 523.25 * (t - 0.38)) * Math.exp(-(t - 0.38) * 4) * 0.8 + Math.sin(2 * Math.PI * 1046.5 * (t - 0.38)) * Math.exp(-(t - 0.38) * 7) * 0.2)) },
+    { id: 'phone', ico: '☎️', name: '電話鈴聲', pcm: gen(0.95, (t) => (t < 0.38 || (t > 0.5 && t < 0.88))
+      ? Math.sin(2 * Math.PI * (Math.floor(t * 20) % 2 ? 1120 : 860) * t) * 0.65 : 0) },
+    { id: 'horn', ico: '🎺', name: '車子喇叭', pcm: gen(0.88, (t) => (t < 0.22 || (t > 0.32 && t < 0.82))
+      ? Math.tanh((Math.sin(2 * Math.PI * 311 * t) + Math.sin(2 * Math.PI * 392 * t)) * 1.5) * 0.6 : 0) },
+    { id: 'piano', ico: '🎹', name: '鋼琴旋律', pcm: gen(1.05, (t) => {
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      let sum = 0;
+      notes.forEach((f, idx) => { const u = t - idx * 0.2; if (u >= 0) sum += (Math.sin(2 * Math.PI * f * u) + 0.3 * Math.sin(4 * Math.PI * f * u)) * Math.exp(-u * 5.5) * 0.55; });
+      return sum;
+    }) }
+  ].map((s) => ({ ...s, url: encodeWav(s.pcm) }));
+
+  function clearPlayTimers() {
+    activeTimers.forEach(clearTimeout);
+    activeTimers = [];
+    player.onended = null;
+    player.pause();
+  }
+
+  function playSingle(url) {
+    setPlaybackSession();
+    clearPlayTimers();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    player.src = url;
+    player.currentTime = 0;
+    player.play().catch(() => {});
+  }
 
   const shuffle = (a) => [...a].sort(() => Math.random() - 0.5);
   const heartsHTML = (n) => '❤️'.repeat(Math.max(0, n)) + '🤍'.repeat(Math.max(0, 3 - n));
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function sayThen(text, onDone) {
     GameHub.setAIMessage(text, true);
@@ -43,6 +99,7 @@
   }
 
   function playSoundOrder(stage, level, lives) {
+    clearPlayTimers();
     const count = level === 1 ? 2 : level === 2 ? 3 : 4;
     const seq = shuffle(SOUNDS).slice(0, count);
     const picked = new Map();
@@ -80,51 +137,78 @@
       ).join('');
     }
 
-    function renderCards(wrongId = null) {
+    function renderCards(stateId = null, stateCls = '') {
       grid.innerHTML = '';
       SOUNDS.forEach((s) => {
         const order = picked.get(s.id);
         const btn = document.createElement('button');
-        btn.className = `so-card ${order ? 'done' : wrongId === s.id ? 'wrong' : ''}`;
+        btn.className = `so-card ${order ? 'done' : stateId === s.id ? stateCls : ''}`;
         btn.innerHTML = `<div class="vg-emoji">${s.ico}</div><div class="vg-label">${s.name}${order ? `（第 ${order}）` : ''}</div>`;
         btn.onclick = () => onCardClick(s);
         grid.appendChild(btn);
       });
     }
 
-    async function playQuizAudio() {
+    // 將整組考題合成單一 WAV 音檔，點擊瞬間立刻開播，100% 相容 iPad
+    function playQuizAudio() {
+      setPlaybackSession();
+      clearPlayTimers();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       mode = 'listening';
       bar.style.display = 'none';
       replayBtn.style.display = 'none';
       slotsEl.style.display = 'flex';
       renderSlots();
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      renderCards();
+
+      const lead = Math.floor(SR * 0.25), gap = Math.floor(SR * 0.65);
+      let total = lead;
+      const marks = [];
+      seq.forEach((s) => { marks.push(total / SR); total += s.pcm.length + gap; });
+      const mix = new Float32Array(total);
+      let pos = lead;
+      seq.forEach((s) => { mix.set(s.pcm, pos); pos += s.pcm.length + gap; });
+
+      if (quizUrl) URL.revokeObjectURL(quizUrl);
+      quizUrl = encodeWav(mix);
       banner.textContent = '👂 請仔細聽，聲音要開始播放囉...';
-      await wait(600);
-      for (let i = 0; i < seq.length; i++) {
-        if (!wrap.isConnected) return;
-        banner.textContent = `🔊 正在播放：第 ${i + 1} / ${count} 個聲音...`;
-        seq[i].play();
-        await wait(1550);
-      }
-      if (!wrap.isConnected) return;
-      mode = 'answer';
-      replayBtn.style.display = 'inline-block';
-      banner.textContent = `👉 請點選出「第 ${step + 1} 個」聽到的聲音！`;
-      GameHub.setAIMessage(`播完囉！請問第 ${step + 1} 個聽到的是哪一種聲音呢？`, true);
+
+      let finished = false;
+      const doneQuiz = () => {
+        if (finished || !wrap.isConnected) return;
+        finished = true;
+        clearPlayTimers();
+        mode = 'answer';
+        replayBtn.style.display = 'inline-block';
+        banner.textContent = `👉 請點選出「第 ${step + 1} 個」聽到的聲音！`;
+        GameHub.setAIMessage(`播完囉！請問第 ${step + 1} 個聽到的是哪一種聲音呢？`, true);
+      };
+
+      marks.forEach((sec, idx) => {
+        activeTimers.push(setTimeout(() => {
+          if (wrap.isConnected) banner.textContent = `🔊 正在播放：第 ${idx + 1} / ${count} 個聲音...`;
+        }, Math.floor(sec * 1000)));
+      });
+      activeTimers.push(setTimeout(doneQuiz, Math.ceil((total / SR) * 1000) + 400));
+
+      player.onended = doneQuiz;
+      player.src = quizUrl;
+      player.currentTime = 0;
+      player.play().catch(() => {});
     }
 
     function onCardClick(s) {
       if (mode === 'preview') {
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        s.play();
+        playSingle(s.url);
+        renderCards(s.id, 'playing');
         banner.textContent = `🔊 這是「${s.name}」的聲音！`;
+        activeTimers.push(setTimeout(() => { if (wrap.isConnected && mode === 'preview') renderCards(); }, 950));
         return;
       }
       if (mode !== 'answer' || picked.has(s.id)) return;
 
       if (s.id === seq[step].id) {
-        s.play();
+        playSingle(s.url);
         step++;
         picked.set(s.id, step);
         renderSlots();
@@ -132,21 +216,26 @@
         if (step === count) {
           mode = 'locked';
           const p = GameHub.randomPraise();
-          GameHub.onRoundComplete(1);
-          sayThen(`${p} ${count} 個聲音的順序全部排對了！`, () => {
+          activeTimers.push(setTimeout(() => {
             if (!wrap.isConnected) return;
-            stage.innerHTML = `<div class="vg-win-box"><div class="vg-win-emoji">🔔🌟🔔</div><h3 class="vg-win-title">第 ${level} 關過關！聽力超棒！</h3><p style="font-size:28px;color:#475569;margin:0 0 28px 0;">${p}</p><div><button class="btn-big green" id="so-next">👉 玩下一關</button><button class="btn-big" style="background:#475569;" onclick="GameHub.goHome()">🏠 回首頁</button></div></div>`;
-            document.getElementById('so-next').onclick = () => playSoundOrder(stage, level + 1, lives);
-          });
+            GameHub.onRoundComplete(1);
+            sayThen(`${p} ${count} 個聲音的順序全部排對了！`, () => {
+              if (!wrap.isConnected) return;
+              stage.innerHTML = `<div class="vg-win-box"><div class="vg-win-emoji">🔔🌟🔔</div><h3 class="vg-win-title">第 ${level} 關過關！聽力超棒！</h3><p style="font-size:28px;color:#475569;margin:0 0 28px 0;">${p}</p><div><button class="btn-big green" id="so-next">👉 玩下一關</button><button class="btn-big" style="background:#475569;" onclick="GameHub.goHome()">🏠 回首頁</button></div></div>`;
+              document.getElementById('so-next').onclick = () => playSoundOrder(stage, level + 1, lives);
+            });
+          }, 950));
         } else {
           banner.textContent = `✅ 答對了！請點選出「第 ${step + 1} 個」聲音！`;
-          setTimeout(() => { if (wrap.isConnected) GameHub.setAIMessage(`答對了！第 ${step} 個是「${s.name}」，那第 ${step + 1} 個是哪個呢？`, true); }, 500);
+          activeTimers.push(setTimeout(() => {
+            if (wrap.isConnected) GameHub.setAIMessage(`答對了！第 ${step} 個是「${s.name}」，那第 ${step + 1} 個是哪個呢？`, true);
+          }, 1000));
         }
       } else {
         mode = 'locked';
         lives--;
         heartsEl.textContent = heartsHTML(lives);
-        renderCards(s.id);
+        renderCards(s.id, 'wrong');
         GameHub.playGentleTryAgain();
         const msg = lives <= 0
           ? `第 ${step + 1} 個不是「${s.name}」喔！三顆愛心都用完了，我們從第一關再挑戰一次吧！`
